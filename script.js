@@ -56,13 +56,55 @@ const encrypt = (message, key) => {
   // Дополняем до 128 бит
   message = get128bit(message);
   key = get128bit(key);
-  print('128-битное сообщение:', `<div style="font-size:10px">${message}</div>`);
-  print('128-битный ключ:', `<div style="font-size:10px">${key}</div>`);
+
+  let msg = message.match(/.{1,8}/g).map(el => parseInt(el, 2))
+  print('10-ричное сообщение:', `<div>${msg.join(', ')}</div>`);
+  msg = msg.map(el => el.toString(16))
+  print('HEX-сообщение:', `<div>${msg.join(', ')}</div>`);
+  let k = key.match(/.{1,8}/g).map(el => parseInt(el, 2))
+  print('10-ричный ключ:', `<div>${k.join(', ')}</div>`);
+  k = k.map(el => el.toString(16))
+  print('HEX-ключ:', `<div>${k.join(', ')}</div>`);
+
+  // Конвертируем бинарное сообщение и ключ в HEX-матрицу
+  state = getMatrix(getHexArr(message));
+  key = getMatrix(getHexArr(key));
+
+  // Генерируем ключи
+  const keysArr = keyGenerator(key, 10);
 
   // Делаем XOR
-  state = addRoundKey(message, key);
-  print('AddRoundKey():', `<div style="font-size:10px">${state}</div>`);
+  state = addRoundKey(state, key);
+  print('AddRoundKey():', `
+  <div style="display:flex;flex-direction:row;align-items:center">
+    <div>${state.map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
+  </div>`);
 
+  // Запускаем цикл
+  for (let i = 1; i < keysArr.length - 1; i++) {
+    print(`<h1 style="color:red">Раунд ${i}</h1>`);
+
+    // Заменяем значениями из таблицы
+    print('SubBytes()');
+    state = subBytes(state);
+  
+    // Делаем сдвиг строк в матрице
+    print('ShiftRows()');
+    state = shiftRows(state);
+  
+    // Умножаем матрицы
+    print('MixColumns()');
+    state = mixColumns(state);
+
+    // Делаем XOR
+    state = addRoundKey(state, keysArr[i]);
+    print('AddRoundKey():', `
+    <div style="display:flex;flex-direction:row;align-items:center">
+      <div>${state.map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
+    </div>`);
+  }
+
+  print(`<h1 style="color:red">Финальный раунд</h1>`);
   // Заменяем значениями из таблицы
   print('SubBytes()');
   state = subBytes(state);
@@ -71,9 +113,19 @@ const encrypt = (message, key) => {
   print('ShiftRows()');
   state = shiftRows(state);
 
-  // Умножаем матрицы
-  print('MixColumns()');
-  state = mixColumns(state);
+  // Делаем XOR
+  state = addRoundKey(state, keysArr[keysArr.length - 1]);
+  print('AddRoundKey():', `
+  <div style="display:flex;flex-direction:row;align-items:center">
+    <div>${state.map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
+  </div>`);
+  
+  print(`<h1 style="color:red">Зашифрованное сообщение:</h1>`);
+  print(`
+    <div style="display:flex;flex-direction:row;align-items:center">
+      <div>${state.map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
+    <div>
+  `)
 }
 
 // Функция с помощью которой мы будем выводить все на экран
@@ -104,8 +156,17 @@ const get128bit = (text) => {
   return bin;
 }
 
-// Функция возвращает XOR между бинарным сообщением и ключом
-const addRoundKey = (msgBin, keyBin) => XOR(msgBin, keyBin);
+// Функция возвращает XOR между стейтом и матрицей ключа сообщением и ключом
+const addRoundKey = (state, keyMatrix) => 
+  state.map((row, rowIdx) => 
+    row.map((el, colIdx) => {
+      const binaryMsgByte = hex2bin(el);
+      const binaryKeyByte = hex2bin(keyMatrix[rowIdx][colIdx]);
+      let hexByte = bin2hex(XOR(binaryMsgByte, binaryKeyByte));
+      while (hexByte.length < 2) hexByte = '0' + hexByte;
+      return hexByte;
+    })
+  );
 
 // Собственно сам XOR
 const XOR = (bin1, bin2) => {
@@ -115,42 +176,32 @@ const XOR = (bin1, bin2) => {
 }
 
 const subBytes = (state) => {
-  // Разбиваем стейт на части по 8 бит
-  const HEXstateArr = state.match(/.{1,8}/g).map(byte => {
-    // Преобразовываем в HEX
-    const hex = bin2hex(byte);
-    return hex.length === 2 ? hex : "0" + hex;
-  });
+  const HEXstateArr = state.flat(Infinity);
 
   // Заменяем значениями из таблицы S-box
-  const result = HEXstateArr.map(hex => {
-    const row = hex2num(hex[0]);
-    const column = hex2num(hex[1]);
-    return SBox[row][column];
-  });
+  let result = HEXstateArr.map(hex => getSboxValue(hex));
 
+  result = getMatrix(result);
   print(`
   Заменяем значениями из таблицы:
   <div style="display:flex;flex-direction:row;align-items:center">
-    <div>${getMatrix(HEXstateArr).map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
+    <div>${state.map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
     <span style="margin: 0 10px">=></span>
-    <div>${getMatrix(result).map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
+    <div>${result.map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
   </div>`);
-
   return result;
 }
 
 // Функция делает битовый сдвиг строк матрицы
 const shiftRows = (state) => {
-  const matrix = getMatrix(state);
   const result = [];
-  matrix.forEach((row, count) => {
+  state.forEach((row, count) => {
     result.push(bitShift(row,'left', count));
   });
   print(`
   Сдвигаем строки:
   <div style="display:flex;flex-direction:row;align-items:center">
-    <div>${getMatrix(state).map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
+    <div>${state.map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
     <span style="margin: 0 10px">=></span>
     <div>${result.map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
   </div>`);
@@ -160,10 +211,7 @@ const shiftRows = (state) => {
 // Функция умножает специальную матрицу на входящую
 const mixColumns = (state) => {
   // Создаем массив столбцов
-  const columns = [];
-  for (let i = 0; i < state.length; i++) {
-    columns.push(state.map(row => row[i]));
-  }
+  const columns = getColumns(state);
   print(`
   Умножаем матрицы:
   <div style="display:flex;flex-direction:row;align-items:center">
@@ -172,16 +220,22 @@ const mixColumns = (state) => {
     <div>${MCmatrix.map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
   </div>`);
 
-  columns.forEach((column) => {
+  return columns.map((column) => {
     const preview = [];
     const preResults = MCmatrix.map(matrixRow => {
       preview.push(matrixRow.map((el, idx) => `${el} * ${column[idx]}`));
       return matrixRow.map((el, idx) => hex2num(el) * hex2num(column[idx]));
     });
-    const results = preResults.map(res => {
+    let results = preResults.map(res => {
       res = res.map(el => num2bin(el));
       return res.reduce((acc, el) => XOR(acc, el));
-    });
+    }).map(el => bin2hex(el));
+    results = results.map(el => {
+      let hex = el;
+      while (hex.length > 2) hex = (hex2num(hex) / 1.5).toString(16)
+      while (hex.length < 2) hex = '0' + hex;
+      return hex;
+    })
     print(`
     <span>Умножаем столбец</span>
     <div style="display:flex;flex-direction:row;align-items:center">
@@ -193,19 +247,41 @@ const mixColumns = (state) => {
       <span style="margin: 0 10px">=</span>
       <div>${preResults.map(el => `<div>${el.join(' ⊕ ')}</div>`).join('')}</div>
       <span style="margin: 0 10px">=</span>
-      <div>${results.map(el => `<div>${parseInt(el, 2)}</div>`).join('')}</div>
-      <span style="margin: 0 10px">=</span>
-      <div>${results.map(el => `<div>${bin2hex(el)}</div>`).join('')}</div>
+      <div>${results.map(el => `<div>${el}</div>`).join('')}</div>
     </div>`);
+    return results;
   });
+}
+
+// Функция генериирует ключи
+const keyGenerator = (keyMatrix, keyCount) => {
+  const matrixCols = getColumns(keyMatrix);
+  const cols = matrixCols;
+  for (let i = 4; i < 4 * (keyCount + 1); i++) {
+    let nextColl = [];
+    const prevCol = cols[i - 1];
+    const xorCol = cols[i-4];
+    if (i % 4 === 0) {
+      const shiftedCol = bitShift(prevCol,'left', 1);
+      const subBytedCol = shiftedCol.map(el => getSboxValue(el));
+      nextColl = subBytedCol.map((el, idx) => bin2hex(XOR(hex2bin(el), hex2bin(xorCol[idx]))));
+    }
+    else {
+      nextColl = prevCol.map((el, idx) => bin2hex(XOR(hex2bin(el), hex2bin(xorCol[idx]))));
+    }
+    cols.push(nextColl.map(el => el.length < 2 ? '0'+el : el));
+  }
+  return getMatrix(cols).map(el => getRows(el));
 }
 
 // Функция делает циклический битовый сдвиг
 const bitShift = (bytesArr, direction, count) => {
   let k;
+  const arr = copyOf(bytesArr);
   if (direction == 'right') k = -1;
   else if (direction == 'left') k = 1;
-  return bytesArr.splice(k * count).concat(bytesArr);
+  const result = arr.splice(k * count).concat(arr);
+  return result;
 }
 
 // Функция преобразовывает входящий массив в матрицу
@@ -216,5 +292,37 @@ const getMatrix = (arr, size=4) => {
   }
   return matrix;
 }
+
+const getHexArr = (binaryMsg) => {
+  return binaryMsg.match(/.{1,8}/g).map(byte => {
+    // Преобразовываем в HEX
+    const hex = bin2hex(byte);
+    return hex.length >= 2 ? hex : "0" + hex;
+  });
+}
+
+// Функция делает deep копию объекта
+const copyOf = (obj) => JSON.parse(JSON.stringify(obj));
+
+// Функция возвращает значение HEX замененное значением из таблицы S-Box
+const getSboxValue = (hex) => {
+  const row = hex2num(hex[0]);
+  const column = hex2num(hex[1]);
+  return SBox[row][column];
+}
+
+// Функция возвращает массив столбцов матрицы
+const getColumns = (matrix) => {
+  const columns = [];
+  for (let i = 0; i < matrix.length; i++) {
+    columns.push(matrix.map(row => row[i]));
+  }
+  return columns;
+}
+
+const getRows = (matrix) => 
+  matrix.map((col, i) => 
+    col.map((el, j) => matrix[j][i])
+  );
 
 encrypt(message, key);
