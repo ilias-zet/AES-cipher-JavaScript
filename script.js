@@ -67,8 +67,18 @@ const encrypt = (message, key) => {
   print('HEX-ключ:', `<div>${k.join(', ')}</div>`);
 
   // Конвертируем бинарное сообщение и ключ в HEX-матрицу
-  state = getMatrix(getHexArr(message));
-  key = getMatrix(getHexArr(key));
+  state = getColumns(getMatrix(getHexArr(message)));
+  key = getColumns(getMatrix(getHexArr(key)));
+  
+  print('State:', `
+  <div style="display:flex;flex-direction:row;align-items:center">
+    <div>${state.map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
+  </div>`);
+  
+  print('Key:', `
+  <div style="display:flex;flex-direction:row;align-items:center">
+    <div>${key.map(row => `<div>${row.join(' ')}</div>`).join('')}</div>
+  </div>`);
 
   // Генерируем ключи
   const keysArr = keyGenerator(key, 10);
