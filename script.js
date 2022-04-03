@@ -162,7 +162,7 @@ const hex2num = (hex) => parseInt(hex, 16);
 // Функция конвертирует текст в двоичный код и дополняет до 128 бит
 const get128bit = (text) => {
   let bin = text.split('').map(letter => alphabet[letter]).join('');
-  while (bin.length < 128) bin = '0' + bin;
+  while (bin.length < 128) bin = bin + '0';
   return bin;
 }
 
