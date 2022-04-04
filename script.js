@@ -234,18 +234,16 @@ const mixColumns = (state) => {
     const preview = [];
     const preResults = MCmatrix.map(matrixRow => {
       preview.push(matrixRow.map((el, idx) => `${el} * ${column[idx]}`));
-      return matrixRow.map((el, idx) => hex2num(el) * hex2num(column[idx]));
+      return matrixRow.map((el, idx) => polynom(el, column[idx]));
     });
     let results = preResults.map(res => {
-      res = res.map(el => num2bin(el));
+      res = res.map(el => hex2bin(el));
       return res.reduce((acc, el) => XOR(acc, el));
-    }).map(el => bin2hex(el));
-    results = results.map(el => {
-      let hex = el;
-      while (hex.length > 2) hex = (hex2num(hex) / 1.5).toString(16)
+    }).map(el => {
+      let hex = bin2hex(el);
       while (hex.length < 2) hex = '0' + hex;
       return hex;
-    })
+    });
     print(`
     <span>Умножаем столбец</span>
     <div style="display:flex;flex-direction:row;align-items:center">
@@ -334,5 +332,26 @@ const getRows = (matrix) =>
   matrix.map((col, i) => 
     col.map((el, j) => matrix[j][i])
   );
+
+// Функция возвращает полиномиальное произведение
+const polynom = (hex1, hex2) => {
+  const bin1 = hex2bin(hex1);
+  const bin2 = hex2bin(hex2);
+  const bin1pows = getPolynomPows(bin1);
+  const bin2pows = getPolynomPows(bin2);
+  const multiplication = bin1pows.flatMap(x1pow => bin2pows.map(x2pow => x1pow + x2pow))
+  const resultArr = [];
+  multiplication.forEach(pow => {
+    const idx = resultArr.indexOf(pow);
+    if (idx === -1) resultArr.push(pow);
+    else resultArr.splice(idx, 1);
+  });
+  const resultStr = Array(8).fill('0').map((zero, pow) => resultArr.includes(pow) ? '1' : zero).reverse().join('');
+  let hex = bin2hex(resultStr);
+  while (hex.length < 2) hex = '0' + hex;
+  return hex;
+}
+
+const getPolynomPows = (bin) => bin.split('').reverse().map((el, idx) => parseInt(el) ? idx : null).filter(el => el !== null);
 
 encrypt(message, key);
